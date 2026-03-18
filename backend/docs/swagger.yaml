@@ -1,0 +1,394 @@
+openapi: 3.0.3
+info:
+  title: Modex Ticket Booking API
+  description: |
+    REST API for a high-concurrency ticket booking system supporting
+    Movies, Bus Trips, Concerts, and Sports events.
+
+    ### Concurrency Guarantee
+    All booking operations use `SELECT ... FOR UPDATE` on both the show row
+    and individual seat rows, followed by an atomic status update.
+    Even under 1 000 simultaneous requests for the same seat, only **one**
+    booking will be `CONFIRMED`. All others receive `FAILED` with a
+    descriptive message — never a silent double-booking.
+
+    ### Booking Expiry
+    PENDING bookings auto-expire after **2 minutes** via a cron job that
+    releases seats back to AVAILABLE.
+  version: 1.0.0
+servers:
+  - url: http://localhost:5000/api
+    description: Local development
+
+tags:
+  - name: Health
+  - name: Shows
+  - name: Bookings
+  - name: Admin
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              example: { status: ok, timestamp: '2025-01-01T00:00:00Z', service: 'Modex Ticket API' }
+
+  /shows:
+    get:
+      tags: [Shows]
+      summary: List upcoming active shows
+      parameters:
+        - in: query
+          name: type
+          schema: { type: string, enum: [MOVIE, BUS, CONCERT, SPORT, OTHER] }
+        - in: query
+          name: search
+          schema: { type: string }
+          description: Case-insensitive match on name or venue
+      responses:
+        '200':
+          description: Array of shows
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/Show' } }
+
+  /shows/{id}:
+    get:
+      tags: [Shows]
+      summary: Get show by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Show detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - properties:
+                      data: { $ref: '#/components/schemas/Show' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /shows/{id}/seats:
+    get:
+      tags: [Shows]
+      summary: Get seat map for a show
+      description: Returns all seats with their current status. Poll this endpoint to detect concurrent bookings.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Seat list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Seat' }
+
+  /bookings:
+    post:
+      tags: [Bookings]
+      summary: Book one or more seats
+      description: |
+        Atomically claims the requested seats.
+
+        **Concurrency flow:**
+        1. `BEGIN`
+        2. `SELECT shows ... FOR UPDATE` — lock show row
+        3. `SELECT seats ... FOR UPDATE` — lock each seat row
+        4. Verify all seats are `AVAILABLE` inside the lock
+        5. `UPDATE seats SET status = 'BOOKED'`
+        6. `UPDATE shows SET booked_seats = booked_seats + N`
+        7. `COMMIT`
+
+        Returns `CONFIRMED` (201) or `FAILED` (409) — never silently overbooks.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateBookingInput' }
+            example:
+              show_id: 550e8400-e29b-41d4-a716-446655440000
+              seat_ids:
+                - a1b2c3d4-e5f6-7890-abcd-ef1234567890
+                - b2c3d4e5-f6a7-8901-bcde-f12345678901
+              user_name: Rahul Mehta
+              user_email: rahul@example.com
+              user_phone: '9876543210'
+      responses:
+        '201':
+          description: Booking confirmed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - properties:
+                      status: { type: string, example: CONFIRMED }
+                      booking: { $ref: '#/components/schemas/Booking' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: One or more seats already booked
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - properties:
+                      status: { type: string, example: FAILED }
+
+  /bookings/{id}:
+    get:
+      tags: [Bookings]
+      summary: Get booking by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Booking with joined show info
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - properties:
+                      data: { $ref: '#/components/schemas/BookingDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    delete:
+      tags: [Bookings]
+      summary: Cancel a booking (releases seats)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Booking cancelled, seats released
+        '400':
+          description: Booking already FAILED or CANCELLED
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/shows:
+    get:
+      tags: [Admin]
+      summary: List ALL shows including past and cancelled
+      responses:
+        '200':
+          description: All shows
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/Show' } }
+
+    post:
+      tags: [Admin]
+      summary: Create a show (auto-generates seat grid)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateShowInput' }
+            example:
+              name: Coldplay — Music of the Spheres
+              type: CONCERT
+              venue: DY Patil Stadium, Mumbai
+              start_time: '2025-12-20T19:00:00+05:30'
+              total_seats: 50
+              price: 2500
+              description: Coldplay live in Mumbai
+      responses:
+        '201':
+          description: Show created with auto-generated seats
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - properties:
+                      data: { $ref: '#/components/schemas/Show' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /admin/shows/{id}:
+    delete:
+      tags: [Admin]
+      summary: Cancel a show and all its bookings
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Show and bookings cancelled
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/bookings:
+    get:
+      tags: [Admin]
+      summary: List all bookings with pagination
+      parameters:
+        - in: query
+          name: show_id
+          schema: { type: string, format: uuid }
+        - in: query
+          name: status
+          schema: { type: string, enum: [PENDING, CONFIRMED, FAILED, CANCELLED] }
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 30 }
+      responses:
+        '200':
+          description: Paginated bookings
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/BookingDetail' } }
+                      pagination:
+                        type: object
+                        properties:
+                          page: { type: integer }
+                          limit: { type: integer }
+                          total: { type: integer }
+
+components:
+  schemas:
+    Show:
+      type: object
+      properties:
+        id:              { type: string, format: uuid }
+        name:            { type: string, example: 'Kalki 2898 AD' }
+        type:            { type: string, enum: [MOVIE, BUS, CONCERT, SPORT, OTHER] }
+        venue:           { type: string, example: 'PVR IMAX Mumbai' }
+        description:     { type: string }
+        start_time:      { type: string, format: date-time }
+        end_time:        { type: string, format: date-time }
+        total_seats:     { type: integer, example: 40 }
+        booked_seats:    { type: integer, example: 12 }
+        available_seats: { type: integer, example: 28 }
+        price:           { type: number, example: 350 }
+        status:          { type: string, enum: [ACTIVE, CANCELLED, COMPLETED] }
+        created_at:      { type: string, format: date-time }
+
+    Seat:
+      type: object
+      properties:
+        id:         { type: string, format: uuid }
+        show_id:    { type: string, format: uuid }
+        seat_code:  { type: string, example: 'A1' }
+        row_label:  { type: string, example: 'A' }
+        seat_num:   { type: integer, example: 1 }
+        status:     { type: string, enum: [AVAILABLE, LOCKED, BOOKED] }
+
+    Booking:
+      type: object
+      properties:
+        id:           { type: string, format: uuid }
+        show_id:      { type: string, format: uuid }
+        user_name:    { type: string }
+        user_email:   { type: string, format: email }
+        user_phone:   { type: string }
+        seat_ids:     { type: array, items: { type: string, format: uuid } }
+        seat_codes:   { type: array, items: { type: string }, example: ['A1','A2'] }
+        total_amount: { type: number, example: 700 }
+        status:       { type: string, enum: [PENDING, CONFIRMED, FAILED, CANCELLED] }
+        expires_at:   { type: string, format: date-time }
+        created_at:   { type: string, format: date-time }
+
+    BookingDetail:
+      allOf:
+        - $ref: '#/components/schemas/Booking'
+        - type: object
+          properties:
+            show_name:  { type: string }
+            show_type:  { type: string }
+            venue:      { type: string }
+            start_time: { type: string, format: date-time }
+            price:      { type: number }
+
+    CreateShowInput:
+      type: object
+      required: [name, start_time, total_seats, price]
+      properties:
+        name:        { type: string }
+        type:        { type: string, enum: [MOVIE, BUS, CONCERT, SPORT, OTHER], default: MOVIE }
+        venue:       { type: string }
+        description: { type: string }
+        start_time:  { type: string, format: date-time }
+        end_time:    { type: string, format: date-time }
+        total_seats: { type: integer, minimum: 1, maximum: 500 }
+        price:       { type: number, minimum: 0 }
+
+    CreateBookingInput:
+      type: object
+      required: [show_id, seat_ids, user_name, user_email, user_phone]
+      properties:
+        show_id:    { type: string, format: uuid }
+        seat_ids:
+          type: array
+          items: { type: string, format: uuid }
+          minItems: 1
+          maxItems: 10
+        user_name:  { type: string }
+        user_email: { type: string, format: email }
+        user_phone: { type: string, description: 'Any valid phone number' }
+
+    Success:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string }
+
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string }
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { success: false, message: 'Show not found' }
+    BadRequest:
+      description: Validation error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { success: false, message: 'seat_ids must be a non-empty array' }
