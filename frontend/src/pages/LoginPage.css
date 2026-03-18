@@ -1,0 +1,47 @@
+.login-page {
+  min-height: calc(100vh - 64px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 2rem 1rem;
+  background: var(--grad-hero);
+}
+.login-card {
+  width: 100%; max-width: 460px;
+  padding: 2.5rem;
+  display: flex; flex-direction: column; gap: 1.25rem;
+  border-radius: 18px; box-shadow: var(--shadow-xl);
+  animation: cardPop .4s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes cardPop { from{opacity:0;transform:scale(.93) translateY(12px)} to{opacity:1;transform:scale(1) translateY(0)} }
+.login-logo { font-size: 1.5rem; font-family:'Syne',sans-serif; font-weight:800; display:flex; align-items:center; gap:.4rem; }
+.login-title { font-size: 1.6rem; font-weight: 800; letter-spacing: -.02em; }
+.login-sub { font-size: .875rem; color: var(--ink2); }
+
+/* Role cards */
+.role-cards { display: flex; flex-direction: column; gap: .75rem; }
+.role-card {
+  display: flex; align-items: center; gap: 1rem;
+  padding: .875rem 1rem; border-radius: 12px;
+  border: 2px solid var(--border); background: var(--bg2);
+  cursor: pointer; text-align: left; width: 100%;
+  transition: all .18s; font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.role-card:hover { border-color: var(--accent); background: var(--accent-bg); }
+.role-card.on { border-color: var(--accent); background: var(--accent-bg); box-shadow: 0 0 0 3px var(--accent-muted); }
+.rc-icon { font-size: 1.75rem; flex-shrink: 0; }
+.rc-info { flex: 1; }
+.rc-title { font-size: .9rem; font-weight: 700; color: var(--ink); }
+.rc-desc  { font-size: .75rem; color: var(--ink2); margin-top: .1rem; }
+.rc-check {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid var(--border2); background: var(--bg2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: .7rem; font-weight: 800; flex-shrink: 0;
+  transition: all .18s;
+}
+.rc-check.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.login-note {
+  font-size: .78rem; color: var(--ink3); background: var(--bg3);
+  padding: .75rem; border-radius: 8px; line-height: 1.5;
+}
+.login-go { width: 100%; justify-content: center; }

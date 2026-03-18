@@ -1,0 +1,202 @@
+.seat-grid-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  user-select: none;
+}
+
+/* Screen */
+.screen-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .4rem;
+}
+.screen-bar {
+  width: 65%;
+  height: 6px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  border-radius: 3px;
+  opacity: .7;
+}
+.screen-label span {
+  font-size: .65rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+
+/* Legend */
+.seat-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  font-size: .75rem;
+  font-weight: 600;
+  color: var(--ink2);
+}
+.legend-dot {
+  display: inline-block;
+  width: 12px; height: 12px;
+  border-radius: 3px;
+  margin-right: .35rem;
+  vertical-align: middle;
+}
+.legend-dot.available { background: var(--bg3); border: 1.5px solid var(--border2); }
+.legend-dot.selected  { background: var(--accent); }
+.legend-dot.booked    { background: var(--border2); border: 1.5px solid var(--border); opacity: .5; }
+
+/* Rows */
+.seat-rows {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  align-items: center;
+  padding: .5rem;
+  background: var(--bg3);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  overflow-x: auto;
+}
+.seat-row {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+}
+.row-label {
+  font-size: .7rem;
+  font-weight: 800;
+  font-family: 'Syne', sans-serif;
+  color: var(--ink3);
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.row-seats {
+  display: flex;
+  gap: .35rem;
+  flex-wrap: nowrap;
+}
+
+/* Individual seat */
+.seat {
+  width: 34px; height: 30px;
+  border-radius: 5px 5px 3px 3px;
+  border: 1.5px solid var(--border2);
+  background: var(--bg2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .15s ease;
+  position: relative;
+  flex-shrink: 0;
+}
+/* Seat back ridge */
+.seat::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 4px; right: 4px;
+  height: 4px;
+  background: var(--border2);
+  border-radius: 3px 3px 0 0;
+  transition: background .15s;
+}
+
+.seat-code {
+  font-size: .58rem;
+  font-weight: 700;
+  color: var(--ink2);
+  line-height: 1;
+  transition: color .15s;
+}
+
+/* Available */
+.seat.available {
+  border-color: var(--border2);
+  background: var(--bg2);
+}
+.seat.available:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  transform: translateY(-2px);
+  box-shadow: 0 3px 8px rgba(232,57,14,.25);
+}
+.seat.available:hover:not(:disabled)::before { background: var(--accent); }
+.seat.available:hover:not(:disabled) .seat-code { color: var(--accent); }
+
+/* Selected */
+.seat.selected,
+.seat.available.selected {
+  background: var(--accent) !important;
+  border-color: var(--accent2) !important;
+  box-shadow: 0 3px 10px rgba(232,57,14,.4);
+  transform: translateY(-2px);
+}
+.seat.selected::before { background: var(--accent2) !important; }
+.seat.selected .seat-code { color: #fff !important; }
+
+/* Booked */
+.seat.booked,
+.seat.locked {
+  background: var(--bg3);
+  border-color: var(--border);
+  cursor: not-allowed;
+  opacity: .45;
+}
+.seat.booked .seat-code,
+.seat.locked .seat-code { color: var(--ink3); }
+
+/* Disabled (limit reached) */
+.seat:disabled:not(.booked):not(.locked) {
+  opacity: .4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Bus layout — 2+2 with aisle gap */
+.bus-layout .row-seats {
+  gap: .35rem;
+}
+.bus-layout .row-seats .seat:nth-child(2) {
+  margin-right: .75rem;
+}
+
+/* Selection summary */
+.seat-selection-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  background: var(--accent-bg);
+  border: 1.5px solid var(--accent-muted);
+  border-radius: 10px;
+  padding: .75rem 1rem;
+  flex-wrap: wrap;
+}
+.sel-codes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+}
+.sel-badge {
+  background: var(--accent);
+  color: #fff;
+  font-size: .7rem;
+  font-weight: 700;
+  padding: .2rem .5rem;
+  border-radius: 5px;
+}
+.sel-badge.more {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+.sel-count {
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
